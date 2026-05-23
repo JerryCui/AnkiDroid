@@ -36,6 +36,7 @@ import com.ichi2.anki.libanki.Card
 import com.ichi2.anki.libanki.CardId
 import com.ichi2.anki.libanki.Collection
 import com.ichi2.anki.libanki.DeckId
+import com.ichi2.anki.libanki.Note
 import com.ichi2.anki.libanki.NoteId
 import com.ichi2.anki.libanki.redoLabel
 import com.ichi2.anki.libanki.sched.CurrentQueueState
@@ -467,7 +468,7 @@ class ReviewerViewModel(
     override suspend fun showQuestion() {
         Timber.v("ReviewerViewModel::showQuestion")
         super.showQuestion()
-        updatePronunciationTarget(currentCard.await())
+        clearPronunciationTarget()
         runStateMutationHook()
         updateMarkIcon()
         updateFlagIcon()
@@ -592,7 +593,6 @@ class ReviewerViewModel(
         }
 
         val card = state.topCard
-        updatePronunciationTarget(card)
         currentCard = CompletableDeferred(card)
         setupAnswerTimer(card)
         autoAdvance.onCardChange(card)
@@ -713,21 +713,43 @@ class ReviewerViewModel(
         voiceRecorderEnabledFlow.value = repository.isRecordVoiceEnabled
     }
 
+    private suspend fun clearPronunciationTarget() {
+        pronunciationTargetTextFlow.emit("")
+    }
+
     private suspend fun updatePronunciationTarget(card: Card) {
-        val answerText =
-            withCol {
-                Jsoup.parse(stripHTMLAndSpecialFields(card.answer(this))).text()
-            }
-        val questionText =
-            withCol {
-                Jsoup.parse(stripHTMLAndSpecialFields(card.question(this))).text()
-            }
         val target =
-            extractEnglishPhrase(answerText)
-                ?: extractEnglishPhrase(questionText)
-                ?: questionText.replace(Regex("\\s+"), " ").trim()
+            withCol {
+                val note = card.note(this@withCol)
+                val answerText = Jsoup.parse(stripHTMLAndSpecialFields(card.answer(this))).text()
+                val questionText = Jsoup.parse(stripHTMLAndSpecialFields(card.question(this))).text()
+                extractPronunciationTargetFromFields(note)
+                    ?: extractEnglishPhrase(answerText)
+                    ?: extractEnglishPhrase(questionText)
+                    ?: questionText.replace(Regex("\\s+"), " ").trim()
+            }
         pronunciationTargetTextFlow.emit(target)
     }
+
+    private fun extractPronunciationTargetFromFields(note: Note): String? {
+        return PREFERRED_PRONUNCIATION_FIELD_NAMES
+            .firstNotNullOfOrNull { fieldName ->
+                if (fieldName !in note) {
+                    return@firstNotNullOfOrNull null
+                }
+                normalizePronunciationFieldText(note.getItem(fieldName))
+                    .takeIf { it.isNotBlank() }
+                    ?.takeUnless(::isLikelyGenericPronunciationToken)
+            }
+    }
+
+    private fun normalizePronunciationFieldText(text: String): String =
+        Jsoup
+            .parse(stripHTMLAndSpecialFields(text))
+            .text()
+            .replace('’', '\'')
+            .replace(Regex("\\s+"), " ")
+            .trim()
 
     private fun extractEnglishPhrase(text: String): String? {
         val normalizedText =
@@ -741,8 +763,22 @@ class ReviewerViewModel(
                 .map { it.value.replace(Regex("\\s+"), " ").trim() }
                 .filter { phrase -> phrase.split(" ").size <= MAX_PRONUNCIATION_TARGET_WORDS }
                 .toList()
-        return candidates.firstOrNull()
+        val meaningfulCandidates =
+            candidates.filterNot(::isLikelyGenericPronunciationToken)
+        val filteredCandidates =
+            if (meaningfulCandidates.isNotEmpty()) meaningfulCandidates else candidates.filterNot(::isLikelyGenericPronunciationToken)
+
+        if (filteredCandidates.isEmpty()) {
+            return null
+        }
+
+        return filteredCandidates.lastOrNull { it.length > 4 }
+            ?: filteredCandidates.lastOrNull()
     }
+
+    private fun isLikelyGenericPronunciationToken(phrase: String): Boolean =
+        phrase.equals("anki", ignoreCase = true) ||
+            phrase.equals("ankidroid", ignoreCase = true)
 
     fun executeAction(action: ViewerAction) {
         Timber.v("ReviewerViewModel::executeAction %s", action.name)
@@ -856,12 +892,13 @@ class ReviewerViewModel(
                 changes.noteText -> {
                     val card = currentCard.await()
                     withCol { card.load(this) }
-                    updatePronunciationTarget(card)
                     cardMediaPlayer.loadCardAvTags(card)
                     updateMarkIcon()
                     if (showingAnswer.value) {
+                        updatePronunciationTarget(card)
                         showAnswer()
                     } else {
+                        clearPronunciationTarget()
                         showQuestion()
                     }
                 }
@@ -878,5 +915,22 @@ class ReviewerViewModel(
         private const val KEY_PREVIOUS_CARD_ID = "key_previous_card_id"
         private const val KEY_COUNTS = "counts"
         private const val MAX_PRONUNCIATION_TARGET_WORDS = 8
+        private val PREFERRED_PRONUNCIATION_FIELD_NAMES =
+            listOf(
+                "Word",
+                "Phrase",
+                "Expression",
+                "Term",
+                "Vocabulary",
+                "Vocab",
+                "English",
+                "Front",
+                "单词",
+                "短语",
+                "词组",
+                "词汇",
+                "英文",
+                "英语",
+            )
     }
 }

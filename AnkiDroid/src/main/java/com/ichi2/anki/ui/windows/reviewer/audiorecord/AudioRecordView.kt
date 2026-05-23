@@ -84,9 +84,17 @@ class AudioRecordView : ConstraintLayout {
         get() = state == ViewState.RECORDING || state == ViewState.LOCKED
 
     private var recordingListener: RecordingListener? = null
+    private var isRecordButtonEnabled = true
 
     fun setRecordingListener(recordingListener: RecordingListener) {
         this.recordingListener = recordingListener
+    }
+
+    fun setRecordButtonEnabled(isEnabled: Boolean) {
+        isRecordButtonEnabled = isEnabled
+        val alpha = if (isEnabled) 1f else DISABLED_RECORD_BUTTON_ALPHA
+        binding.recordButton.alpha = alpha
+        binding.recordIcon.alpha = alpha
     }
 
     private lateinit var gestureDetector: GestureDetector
@@ -130,6 +138,8 @@ class AudioRecordView : ConstraintLayout {
         fun onRecordingCanceled()
 
         fun onRecordingCompleted()
+
+        fun onRecordingDisabled()
     }
 
     private fun setupTouchListener() {
@@ -138,6 +148,10 @@ class AudioRecordView : ConstraintLayout {
                 context,
                 object : GestureDetector.SimpleOnGestureListener() {
                     override fun onDown(e: MotionEvent): Boolean {
+                        if (!isRecordButtonEnabled) {
+                            recordingListener?.onRecordingDisabled()
+                            return true
+                        }
                         if (!Permissions.canRecordAudio(context)) {
                             recordingListener?.onRecordingPermissionRequired()
                             return true
@@ -153,12 +167,14 @@ class AudioRecordView : ConstraintLayout {
                     }
 
                     override fun onSingleTapUp(e: MotionEvent): Boolean {
+                        if (!isRecordButtonEnabled) return true
                         if (!Permissions.canRecordAudio(context)) return true
                         lock()
                         return true
                     }
 
                     override fun onLongPress(e: MotionEvent) {
+                        if (!isRecordButtonEnabled) return
                         if (!Permissions.canRecordAudio(context)) return
                         CompatHelper.compat.vibrate(context, 50.milliseconds, USAGE_TOUCH)
                         showCancelAndLockSliders()
@@ -464,5 +480,9 @@ class AudioRecordView : ConstraintLayout {
 
             override fun newArray(size: Int): Array<SavedState?> = arrayOfNulls(size)
         }
+    }
+
+    private companion object {
+        const val DISABLED_RECORD_BUTTON_ALPHA = 0.45f
     }
 }

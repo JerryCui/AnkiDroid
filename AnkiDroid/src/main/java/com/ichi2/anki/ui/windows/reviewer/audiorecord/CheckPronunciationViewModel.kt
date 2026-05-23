@@ -189,7 +189,7 @@ class CheckPronunciationViewModel(
         if (currentTargetText.isBlank()) {
             pronunciationResultFlow.emit(null)
             recognitionStatusFlow.emit("")
-            recognitionErrorFlow.emit("No target text available for comparison.")
+            recognitionErrorFlow.emit("Show the answer before pronunciation check.")
             return
         }
         runCatching {
@@ -197,14 +197,7 @@ class CheckPronunciationViewModel(
         }.onSuccess { result ->
             saveDebugRecording("xunfei_${result.totalScore.roundToInt()}")
             pronunciationResultFlow.emit(buildXunfeiAssessment(result))
-            recognitionStatusFlow.emit(
-                buildString {
-                    append("Pronunciation assessment")
-                    result.accuracyScore?.let { append("  Accuracy ${it.roundToInt()}") }
-                    result.fluencyScore?.let { append("  Fluency ${it.roundToInt()}") }
-                    result.integrityScore?.let { append("  Completeness ${it.roundToInt()}") }
-                },
-            )
+            recognitionStatusFlow.emit("")
             isRecognizingSpeechFlow.emit(false)
         }.onFailure { error ->
             Log.w(TAG, "xunfei pronunciation evaluation failed", error)

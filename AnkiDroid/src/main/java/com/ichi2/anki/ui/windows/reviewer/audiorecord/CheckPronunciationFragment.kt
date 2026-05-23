@@ -24,6 +24,7 @@ import android.text.SpannableStringBuilder
 import android.text.Spanned
 import android.text.style.ForegroundColorSpan
 import android.view.View
+import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.core.content.ContextCompat
@@ -118,6 +119,10 @@ class CheckPronunciationFragment : Fragment(R.layout.fragment_check_pronunciatio
                 override fun onRecordingCompleted() {
                     viewModel.onRecordingCompleted()
                 }
+
+                override fun onRecordingDisabled() {
+                    Toast.makeText(requireContext(), R.string.pronunciation_show_answer_first, Toast.LENGTH_SHORT).show()
+                }
             },
         )
     }
@@ -146,9 +151,10 @@ class CheckPronunciationFragment : Fragment(R.layout.fragment_check_pronunciatio
         }
 
         viewModel.pronunciationTargetFlow.flowWithLifecycle(lifecycle).collectIn(lifecycleScope) { target ->
-            binding.targetPhrase.text = target
+            binding.targetPhrase.text = getString(R.string.pronunciation_target_compact, target)
             binding.targetPhrase.isVisible = target.isNotBlank()
-            binding.targetPhraseTitle.isVisible = target.isNotBlank()
+            binding.targetPhraseTitle.isVisible = false
+            binding.recordView.setRecordButtonEnabled(target.isNotBlank())
             if (target.isBlank()) {
                 binding.expectedPhraseSectionTitle.isVisible = false
                 binding.expectedPhraseText.isVisible = false
@@ -170,14 +176,22 @@ class CheckPronunciationFragment : Fragment(R.layout.fragment_check_pronunciatio
                     return@collectIn
                 }
 
-                binding.expectedPhraseSectionTitle.isVisible = true
-                binding.expectedPhraseText.isVisible = true
-                binding.spokenPhraseSectionTitle.isVisible = true
-                binding.spokenPhraseText.isVisible = true
+                val needsPractice = result.spokenTokens.any { it.state != PronunciationTokenState.MATCH }
+                binding.expectedPhraseSectionTitle.isVisible = false
+                binding.expectedPhraseText.isVisible = needsPractice
+                binding.spokenPhraseSectionTitle.isVisible = false
+                binding.spokenPhraseText.isVisible = false
                 binding.scoreText.isVisible = true
-                binding.scoreText.text = getString(R.string.pronunciation_score, result.scorePercent)
-                binding.expectedPhraseText.text = formatPronunciationLine(result.expectedTokens)
-                binding.spokenPhraseText.text = formatPronunciationLine(result.spokenTokens)
+                binding.scoreText.text =
+                    getString(
+                        if (needsPractice) {
+                            R.string.pronunciation_score_needs_practice
+                        } else {
+                            R.string.pronunciation_score_passed
+                        },
+                        result.scorePercent,
+                    )
+                binding.expectedPhraseText.text = formatPronunciationLine(result.spokenTokens)
             }
 
         viewModel.recognitionStatusFlow

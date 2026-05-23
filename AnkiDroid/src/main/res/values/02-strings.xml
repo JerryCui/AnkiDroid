@@ -470,12 +470,16 @@ opening the system text to speech settings fails">Failed to open text to speech 
 
     <!-- Pronunciation assessment -->
     <string name="pronunciation_target_title">Practice text</string>
+    <string name="pronunciation_target_compact">Practice: %1$s</string>
     <string name="pronunciation_expected_title">Word scores</string>
     <string name="pronunciation_spoken_title">Needs practice</string>
     <string name="pronunciation_score" comment="Pronunciation score from 0 to 100">Pronunciation score: %1$d</string>
+    <string name="pronunciation_score_passed" comment="Pronunciation score summary when all words passed">Score: %1$d - all words passed</string>
+    <string name="pronunciation_score_needs_practice" comment="Pronunciation score summary when some words need practice">Score: %1$d - needs practice</string>
     <string name="pronunciation_listening">Listening...</string>
     <string name="pronunciation_listening_done">Checking pronunciation...</string>
     <string name="pronunciation_no_text">No words to show</string>
+    <string name="pronunciation_show_answer_first">Show the answer before pronunciation check.</string>
 
     <string comment="Shown when retrying a running action" name="already_in_progress">Already in progress</string>
 </resources>
